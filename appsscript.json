@@ -1,0 +1,19 @@
+{
+  "timeZone": "America/Denver",
+  "dependencies": {
+    "libraries": [
+      {
+        "userSymbol": "TrustUtils",
+        "version": "10",
+        "libraryId": "1iSeI4qPDINQTDz2skXA6watxoRJyS5L_HlPSbtQHMm85mnD6D75OuY6d",
+        "developmentMode": false
+      }
+    ]
+  },
+  "exceptionLogging": "STACKDRIVER",
+  "runtimeVersion": "V8",
+  "webapp": {
+    "executeAs": "USER_DEPLOYING",
+    "access": "MYSELF"
+  }
+}
