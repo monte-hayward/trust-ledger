@@ -53,3 +53,6 @@ Thumbs.db
 # or other Google auth tools during login.
 credentials.json
 .tokens/
+
+# temporary scratch directory
+temp
