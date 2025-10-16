@@ -1,9 +1,9 @@
 /**
- * MenuSetup.gs (BOUND TO LEDGER SPREADSHEET)
- * Handles custom menu creation and the onEdit trigger for interactive receipt linking.
- * * NOTE: This script REQUIRES the TrustUtils library to be linked with the identifier 'TrustUtils' 
- * * and the library version must be updated every time core logic changes.
+ * @fileoverview Sets up the custom menu for the Trust Ledger application in the spreadsheet.
+ * This script is container-bound and relies on SpreadsheetApp.getActiveSpreadsheet().
  */
+
+const TrustUtils = TrustUtilsLib;
 
 // --- CONFIGURATION CONSTANTS (Local only: Column indices) ---
 // Column index (1-indexed) where the action button ("add proof...") is located (Column H)
@@ -14,8 +14,6 @@ const LEDGER_SHEET_NAME = 'LEDGER'; // Defined locally as the sheet name is only
 
 /**
  * Runs automatically when the spreadsheet is opened. Creates the custom menu.
- * MAY need to run authorizeDriveAccess from the custom menu before manually running onOpen,
- * to fix Failed to access drive folder: Unexpected error while getting the method or property getFolderById on object DriveApp
  */
 function onOpen() {
   SpreadsheetApp.getUi()
@@ -24,7 +22,7 @@ function onOpen() {
       .addItem('---', 'noop')
       .addItem('Undo Last Import', 'runUndoLastImport')
       .addItem('---', 'noop')
-      .addItem('Authorize Drive Access', 'authorizeDriveAccess') // <-- NEW MENU ITEM
+      .addItem('Authorize Drive Access', 'authorizeDriveAccess')
       .addToUi();
 }
 
@@ -34,7 +32,9 @@ function onOpen() {
  */
 function runDiscoverImport() {
   try {
-    TrustUtils.processRawDiscoverCardData_Mapped();
+    const ledger = SpreadsheetApp.getActiveSpreadsheet();
+    // Pass the ledger object explicitly to the utility library for execution.
+    TrustUtils.processRawDiscoverCardData_Mapped(ledger); 
   } catch (e) {
     SpreadsheetApp.getUi().alert(`Import Failed: ${e.message}`);
     Logger.log(e);
@@ -46,7 +46,8 @@ function runDiscoverImport() {
  */
 function runUndoLastImport() {
   try {
-    TrustUtils.undoLastImport();
+    const ledger = SpreadsheetApp.getActiveSpreadsheet();
+    TrustUtils.undoLastImport(ledger);
   } catch (e) {
     SpreadsheetApp.getUi().alert(`Undo Failed: ${e.message}`);
     Logger.log(e);
@@ -54,9 +55,7 @@ function runUndoLastImport() {
 }
 
 /**
- * NEW FUNCTION: Forces the authorization dialog to appear for the DriveApp scope.
- * The user must run this manually from the menu if an access error occurs.
- * Fixes error: Failed to access drive folder: Unexpected error while getting the method or property getFolderById on object DriveApp
+ * Forces the authorization dialog to appear for the DriveApp scope.
  */
 function authorizeDriveAccess() {
   // A simple call to the DriveApp service forces the authorization prompt.
@@ -70,11 +69,12 @@ function authorizeDriveAccess() {
 }
 
 /**
- * Runs automatically when a cell is manually edited (e.g., user clicks the "add proof..." formula and presses Enter).
+ * Runs automatically when a cell is manually edited.
  * If the edit occurs in the Proof Action column, this launches the file picker dialog or attempts auto-match.
  * @param {GoogleAppsScript.Events.SheetsOnEdit} e The event object.
  */
 function onEdit(e) {
+  // onEdit uses the event object which is intrinsically bound to the active spreadsheet.
   const sheet = e.range.getSheet();
   if (sheet.getName() !== LEDGER_SHEET_NAME) return;
 
@@ -87,7 +87,6 @@ function onEdit(e) {
     const cell = e.range;
     
     // Get transaction details for use in the matching function
-    // Assuming Date (Col A), Source (Col B), Payee/Vendor (Col C), Amount (Col D)
     const transactionRange = sheet.getRange(editedRow, 1, 1, 4); 
     const [, , vendorStr, amount] = transactionRange.getValues()[0]; 
 
@@ -96,7 +95,6 @@ function onEdit(e) {
     cell.setFormula(buttonFormula); 
     
     // --- 1. Attempt Automatic Receipt Match (File Name Metadata) ---
-    // Calls the library function to search by metadata
     const autoLink = TrustUtils.findReceiptByMetadata(vendorStr, amount); 
     
     if (autoLink) {
@@ -106,7 +104,7 @@ function onEdit(e) {
       ui.alert(`Auto-match successful! Link added to cell ${linkRange.getA1Notation()}.`);
     } else {
       // --- 2. If no auto-match, launch Manual File Picker Dialog ---
-      // Call the library function to display the file picker UI
+      // Pass the current row and column to ensure the result goes back to the correct cell.
       TrustUtils.showReceiptDialog(editedRow, PROOF_LINK_COL_INDEX);
     }
   }
