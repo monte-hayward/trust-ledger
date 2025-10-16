@@ -1,40 +1,55 @@
 /**
- * @fileoverview Sets up the custom menu for the Trust Ledger application in the spreadsheet.
- * This script is container-bound and relies on SpreadsheetApp.getActiveSpreadsheet().
+ * MenuSetup.js (BOUND TO LEDGER SPREADSHEET)
+ * Handles custom menu creation and the onEdit trigger for interactive receipt linking.
+ * This file is responsible for determining the execution environment.
+ * NOTE: This script REQUIRES the TrustUtils library to be linked with the identifier 'TrustUtilsLib'.
  */
 
-const TrustUtils = TrustUtilsLib;
+// --- ENVIRONMENT CONFIGURATION ---
+// PROD_LEDGER_SCRIPT_ID is used to determine if the script is running in the production environment.
+const PROD_LEDGER_SCRIPT_ID = '1XZ9JSz7GlYkTfqY06pXK4iLzitORsktkvMKS-xDC6V-U8eahxgXwBKI2'; 
 
-// --- CONFIGURATION CONSTANTS (Local only: Column indices) ---
-// Column index (1-indexed) where the action button ("add proof...") is located (Column H)
+// --- CONFIGURATION CONSTANTS (Local only) ---
+const LEDGER_SHEET_NAME = 'LEDGER'; 
 const PROOF_ACTION_COL_INDEX = 8; 
-// Column index (1-indexed) where the final Proof Link URL is stored (Column G)
 const PROOF_LINK_COL_INDEX = 7; 
-const LEDGER_SHEET_NAME = 'LEDGER'; // Defined locally as the sheet name is only needed here and should not be a library constant
+
+/**
+ * Calculates whether the current execution context is the production environment.
+ * @returns {boolean} True if the current script ID matches the PROD_LEDGER_SCRIPT_ID.
+ */
+function isProductionEnvironment() {
+  const currentScriptId = ScriptApp.getScriptId();
+  return currentScriptId === PROD_LEDGER_SCRIPT_ID;
+}
 
 /**
  * Runs automatically when the spreadsheet is opened. Creates the custom menu.
  */
 function onOpen() {
+  const isProd = isProductionEnvironment();
+  const envLabel = isProd ? 'PRODUCTION' : 'STAGING';
+  
   SpreadsheetApp.getUi()
-      .createMenu('⚙️ Trust Automation')
+      .createMenu(`⚙️ Trust Automation (${envLabel})`) // Adds the environment label to the menu
       .addItem('Run Discover Card Import', 'runDiscoverImport')
       .addItem('---', 'noop')
       .addItem('Undo Last Import', 'runUndoLastImport')
       .addItem('---', 'noop')
-      .addItem('Authorize Drive Access', 'authorizeDriveAccess')
+      .addItem('Authorize Drive Access', 'authorizeDriveAccess') 
       .addToUi();
 }
 
 /**
  * Custom menu function that calls the Discover Card processing logic 
- * from the external TrustUtils library.
+ * from the external TrustUtils library, passing the environment flag.
  */
 function runDiscoverImport() {
+  const ledger = SpreadsheetApp.getActiveSpreadsheet();
+  const isProd = isProductionEnvironment();
   try {
-    const ledger = SpreadsheetApp.getActiveSpreadsheet();
-    // Pass the ledger object explicitly to the utility library for execution.
-    TrustUtils.processRawDiscoverCardData_Mapped(ledger); 
+    // Pass the ledger object and the environment flag to the utility library.
+    TrustUtilsLib.processRawDiscoverCardData_Mapped(ledger, isProd);
   } catch (e) {
     SpreadsheetApp.getUi().alert(`Import Failed: ${e.message}`);
     Logger.log(e);
@@ -43,11 +58,14 @@ function runDiscoverImport() {
 
 /**
  * Custom menu function that calls the Undo logic from the external TrustUtils library.
+ * This also needs to pass the isProd flag if the undo logic might involve environment-specific actions.
  */
 function runUndoLastImport() {
+  const ledger = SpreadsheetApp.getActiveSpreadsheet();
+  const isProd = isProductionEnvironment();
   try {
-    const ledger = SpreadsheetApp.getActiveSpreadsheet();
-    TrustUtils.undoLastImport(ledger);
+    // Assuming undoLastImport might also need the ledger and environment status
+    TrustUtilsLib.undoLastImport(ledger, isProd); 
   } catch (e) {
     SpreadsheetApp.getUi().alert(`Undo Failed: ${e.message}`);
     Logger.log(e);
@@ -58,7 +76,6 @@ function runUndoLastImport() {
  * Forces the authorization dialog to appear for the DriveApp scope.
  */
 function authorizeDriveAccess() {
-  // A simple call to the DriveApp service forces the authorization prompt.
   try {
     DriveApp.getFolders(); 
     SpreadsheetApp.getUi().alert("Drive access authorized or already enabled. Try the import again.");
@@ -70,18 +87,16 @@ function authorizeDriveAccess() {
 
 /**
  * Runs automatically when a cell is manually edited.
- * If the edit occurs in the Proof Action column, this launches the file picker dialog or attempts auto-match.
  * @param {GoogleAppsScript.Events.SheetsOnEdit} e The event object.
  */
 function onEdit(e) {
-  // onEdit uses the event object which is intrinsically bound to the active spreadsheet.
   const sheet = e.range.getSheet();
   if (sheet.getName() !== LEDGER_SHEET_NAME) return;
 
   const editedCol = e.range.getColumn();
   const editedRow = e.range.getRow();
   
-  // Check if the edit occurred in the designated Proof Action column (Column H / index 8)
+  // Check if the edit occurred in the designated Proof Action column
   if (editedCol === PROOF_ACTION_COL_INDEX) {
     const ui = SpreadsheetApp.getUi();
     const cell = e.range;
@@ -95,17 +110,16 @@ function onEdit(e) {
     cell.setFormula(buttonFormula); 
     
     // --- 1. Attempt Automatic Receipt Match (File Name Metadata) ---
-    const autoLink = TrustUtils.findReceiptByMetadata(vendorStr, amount); 
+    // Note: This function doesn't need isProd, as finding a receipt is read-only.
+    const autoLink = TrustUtilsLib.findReceiptByMetadata(vendorStr, amount); 
     
     if (autoLink) {
-      // If a match is found, apply the hyperlink formula directly to the Proof Link column (G)
       const linkRange = sheet.getRange(editedRow, PROOF_LINK_COL_INDEX);
       linkRange.setFormula(`=HYPERLINK("${autoLink}", "Receipt (Auto-Match)")`);
       ui.alert(`Auto-match successful! Link added to cell ${linkRange.getA1Notation()}.`);
     } else {
       // --- 2. If no auto-match, launch Manual File Picker Dialog ---
-      // Pass the current row and column to ensure the result goes back to the correct cell.
-      TrustUtils.showReceiptDialog(editedRow, PROOF_LINK_COL_INDEX);
+      TrustUtilsLib.showReceiptDialog(editedRow, PROOF_LINK_COL_INDEX);
     }
   }
 }
