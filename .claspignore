@@ -1,0 +1,45 @@
+# Backup and temporary directories
+backup-before-clone
+temp
+backup
+
+# Version control
+.git
+.gitignore
+
+# Node.js
+node_modules
+dist
+build
+out
+ts-output
+
+# Environment and credentials
+.env
+.env.*
+.env.local
+credentials.json
+.tokens
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Generated files
+*.js.map
+*.d.ts
+
+# Development files
+README.md
+*.bash
+script-id.txt
+
+# Clasp config (clasp manages this, don't push it)
+.clasp.json

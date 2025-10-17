@@ -56,3 +56,5 @@ credentials.json
 
 # temporary scratch directory
 temp
+backup
+backup-before-clone
